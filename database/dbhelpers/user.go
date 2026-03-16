@@ -10,22 +10,22 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func GetUserIDFromSession(sessionId string) (userId string, err error) {
-	query := `Select user_id 
-             from user_session where id=$1
-             And archived_at is null`
+func GetUserIDFromSession(sessionID string) (userID string, err error) {
+	query := `SELECT user_id 
+             FROM user_session where id=$1
+             AND archived_at is null`
 
-	err = database.Asset.Get(&userId, query, sessionId)
+	err = database.Asset.Get(&userID, query, sessionID)
 	if err != nil {
 		return "", err
 	}
-	return userId, nil
+	return userID, nil
 }
 func GetUserByEmail(tx *sqlx.Tx, email, password string) (string, string, error) {
-	query := `Select id, password_hash,role
-             from users 
-             where TRIM(LOWER(email)) = LOWER($1)
-             And archived_at is null`
+	query := `SELECT id, password_hash,role
+             FROM users 
+             WHERE TRIM(LOWER(email)) = LOWER($1)
+             AND archived_at is null`
 	var result models.UserExist
 	err := tx.Get(&result, query, email)
 	if err != nil {
@@ -39,10 +39,10 @@ func GetUserByEmail(tx *sqlx.Tx, email, password string) (string, string, error)
 	return result.ID, result.Role, nil
 }
 func IsUserExist(email string) (bool, error) {
-	query := `Select Count(*)>0
-             from users 
-             where trim(LOWER(email)) = trim(lower($1))
-             And archived_at is null`
+	query := `SELECT COUNT(*)>0
+             FROM users 
+             WHERE TRIM(LOWER(email)) = TRIM(lower($1))
+             AND archived_at is null`
 	var exist bool
 	err := database.Asset.Get(&exist, query, email)
 	if err != nil {
@@ -53,27 +53,27 @@ func IsUserExist(email string) (bool, error) {
 func CreateUser(tx *sqlx.Tx, name, email, role, userType, phoneNo, passwordHash string, joiningDate time.Time) (string, error) {
 	query := `INSERT INTO users (name, email,role,type,phone_no,password_hash,joining_date)
                values ($1, trim(lower($2)), $3, $4, $5, $6, $7) RETURNING id`
-	var userId string
-	err := tx.Get(&userId, query, name, email, role, userType, phoneNo, passwordHash, joiningDate)
+	var userID string
+	err := tx.Get(&userID, query, name, email, role, userType, phoneNo, passwordHash, joiningDate)
 	if err != nil {
 		return "", err
 	}
-	return userId, nil
+	return userID, nil
 }
-func CreateUserSession(tx *sqlx.Tx, userId string) (string, error) {
+func CreateUserSession(tx *sqlx.Tx, userID string) (string, error) {
 	query := `INSERT INTO user_session (user_id)
               values ($1)RETURNING id`
-	var userSessionId string
-	err := tx.Get(&userSessionId, query, userId)
+	var userSessionID string
+	err := tx.Get(&userSessionID, query, userID)
 	if err != nil {
 		return "", err
 	}
-	return userSessionId, nil
+	return userSessionID, nil
 }
 
 func ArchivedSession(sessionID string) error {
-	query := `Update user_session 
-             set archived_at=Now() where id=$1 and archived_at is null`
+	query := `UPDATE user_session 
+             SET archived_at=Now() where id=$1 and archived_at is null`
 	_, err := database.Asset.Exec(query, sessionID)
 	if err != nil {
 		return err
@@ -81,18 +81,18 @@ func ArchivedSession(sessionID string) error {
 	return nil
 }
 func CreateAsset(tx *sqlx.Tx, brand, model, serialNo, assetType, owner string, warrantyStart, warrantyEnd time.Time) (string, error) {
-	query := `Insert into assets (brand, model, serial_no,type, owner,warranty_start, warranty_end)
+	query := `INSERT INTO assets (brand, model, serial_no,type, owner,warranty_start, warranty_end)
 	          Values($1, $2, $3, $4, $5, $6, $7) returning id`
-	var assetId string
-	err := tx.Get(&assetId, query, brand, model, serialNo, assetType, owner, warrantyStart, warrantyEnd)
+	var assetID string
+	err := tx.Get(&assetID, query, brand, model, serialNo, assetType, owner, warrantyStart, warrantyEnd)
 	if err != nil {
 		return "", err
 	}
-	return assetId, nil
+	return assetID, nil
 
 }
-func AssignAsset(tx *sqlx.Tx, assetId, assignedTo, assignedBy string) error {
-	query := `Update assets set
+func AssignAsset(assetID, assignedTo, assignedBy string) error {
+	query := `UPDATE assets SET
              status ='assigned',
              assigned_to = $2 ,
              assigned_by_id = $3,
@@ -101,7 +101,7 @@ func AssignAsset(tx *sqlx.Tx, assetId, assignedTo, assignedBy string) error {
              where id = $1
              and archived_at is null
              and status = 'available'`
-	result, err := tx.Exec(query, assetId, assignedTo, assignedBy)
+	result, err := database.Asset.Exec(query, assetID, assignedTo, assignedBy)
 	if err != nil {
 		return err
 	}
@@ -114,74 +114,101 @@ func AssignAsset(tx *sqlx.Tx, assetId, assignedTo, assignedBy string) error {
 	}
 	return nil
 }
-func InsertLaptop(tx *sqlx.Tx, assetId string, laptop *models.LaptopInput) error {
-	query := `Insert into laptop(asset_id,processor, ram,storage,os, charger, password)
-             values ($1, $2, $3, $4, $5, $6,$7)`
+func InsertLaptop(tx *sqlx.Tx, assetID string, laptop *models.LaptopInput) error {
+	query := `
+		INSERT INTO laptop (
+			asset_id,
+			processor,
+			ram,
+			storage,
+			os,
+			charger,
+			password
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	`
 
-	result, err := tx.Exec(query, assetId, laptop.Processor, laptop.RAM, laptop.Storage, laptop.OS, laptop.Charger, laptop.Password)
-	if err != nil {
-		return err
-	}
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rowsAffected == 0 {
-		return fmt.Errorf("asset not found or not available for assignment")
-	}
-	return nil
-}
-func InsertMouse(tx *sqlx.Tx, assetId string, mouse *models.MouseInput) error {
-	query := `Insert into mouse(asset_id, dpi, connectivity) 
-             values ($1, $2, $3)`
-	result, err := tx.Exec(query, assetId, mouse.Dpi, mouse.Connectivity)
-	if err != nil {
-		return err
-	}
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rowsAffected == 0 {
-		return fmt.Errorf("asset not found or not available for assignment")
-	}
-	return nil
-}
-func InsertKeyboard(tx *sqlx.Tx, assetId string, keyboard *models.KeyboardInput) error {
-	query := ` Insert into keyboard(asset_id, layout, connectivity)
-  values($1, $2, $3)`
-	result, err := tx.Exec(query, assetId, keyboard.Layout, keyboard.Connectivity)
-	if err != nil {
-		return err
-	}
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rowsAffected == 0 {
-		return fmt.Errorf("asset not found or not available for assignment")
-	}
-	return nil
+	_, err := tx.Exec(
+		query,
+		assetID,
+		laptop.Processor,
+		laptop.RAM,
+		laptop.Storage,
+		laptop.OS,
+		laptop.Charger,
+		laptop.Password,
+	)
+
+	return err
 }
 
-func InsertMobile(tx *sqlx.Tx, assetId string, mobile *models.MobileInput) error {
-	query := `Insert into mobile(asset_id, os,ram,storage,charger, password)
-              values ($1, $2, $3, $4, $5, $6)`
-	result, err := tx.Exec(query, assetId, mobile.Os, mobile.Ram, mobile.Storage, mobile.Charger, mobile.Password)
-	if err != nil {
-		return err
-	}
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rowsAffected == 0 {
-		return fmt.Errorf("asset not found or not available for assignment")
-	}
-	return nil
+func InsertMouse(tx *sqlx.Tx, assetID string, mouse *models.MouseInput) error {
+	query := `
+		INSERT INTO mouse (
+			asset_id,
+			dpi,
+			connectivity
+		)
+		VALUES ($1, $2, $3)
+	`
+
+	_, err := tx.Exec(
+		query,
+		assetID,
+		mouse.Dpi,
+		mouse.Connectivity,
+	)
+
+	return err
+}
+
+func InsertKeyboard(tx *sqlx.Tx, assetID string, keyboard *models.KeyboardInput) error {
+	query := `
+		INSERT INTO keyboard (
+			asset_id,
+			layout,
+			connectivity
+		)
+		VALUES ($1, $2, $3)
+	`
+
+	_, err := tx.Exec(
+		query,
+		assetID,
+		keyboard.Layout,
+		keyboard.Connectivity,
+	)
+
+	return err
+}
+
+func InsertMobile(tx *sqlx.Tx, assetID string, mobile *models.MobileInput) error {
+	query := `
+		INSERT INTO mobile (
+			asset_id,
+			os,
+			ram,
+			storage,
+			charger,
+			password
+		)
+		VALUES ($1, $2, $3, $4, $5, $6)
+	`
+
+	_, err := tx.Exec(
+		query,
+		assetID,
+		mobile.OS,
+		mobile.RAM,
+		mobile.Storage,
+		mobile.Charger,
+		mobile.Password,
+	)
+
+	return err
 }
 func FindTotalAssetById(userID string) (models.DashboardUserData, error) {
-	query := `Select count(*) as active_asset from assets 
+	query := `SELECT COUNT(*) as active_asset from assets 
                 where assigned_to=$1 and status='assigned'
                 AND archived_at is null`
 	var dummy models.DashboardUserData
@@ -191,7 +218,7 @@ func FindTotalAssetById(userID string) (models.DashboardUserData, error) {
 		return dummy, err
 	}
 	assetInfo := make([]models.Asset, 0)
-	query1 := `Select brand,model,serial_no,type,status,owner,created_at
+	query1 := `SELECT brand,model,serial_no,type,status,owner,created_at
                from assets 
                where assigned_to=$1 and archived_at is null`
 	err = database.Asset.Select(&assetInfo, query1, userID)
@@ -203,18 +230,27 @@ func FindTotalAssetById(userID string) (models.DashboardUserData, error) {
 		Assets:  assetInfo,
 	}, nil
 }
-func SentToService(assetId string, serviceStart, serviceEnd time.Time) error {
-	query := `update assets set status='in_service',service_start=$2,service_end=$3,updated_at=now()
-              where id=$1 and archived_at is null and status ='available'`
-	_, err := database.Asset.Exec(query, assetId, serviceStart, serviceEnd)
+func SentToService(assetID string, serviceStart, serviceEnd time.Time) error {
+	query := `UPDATE assets SET status='in_service',service_start=$2,service_end=$3,updated_at=now()
+              WHERE id=$1 AND archived_at is null and status ='available'`
+	result, err := database.Asset.Exec(query, assetID, serviceStart, serviceEnd)
 	if err != nil {
 		return err
 	}
-	return nil
 
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("asset not available for service")
+	}
+
+	return nil
 }
 func ShowAssets(typeStr, statusStr, ownerStr, brandStr, modelStr, serialNumberStr string, limit, offset int) (models.DashboardData, error) {
-	SQL := `SELECT brand, model, type, serial_no, status, owner, created_at
+	summaryQuery := `SELECT brand, model, type, serial_no, status, owner, created_at
 			FROM assets
 			WHERE archived_at IS NULL
 			AND ($1 = '' OR brand ILIKE '%'||$1||'%')
@@ -246,7 +282,7 @@ func ShowAssets(typeStr, statusStr, ownerStr, brandStr, modelStr, serialNumberSt
 		return res, DashboardErr
 	}
 
-	err := database.Asset.Select(&assets, SQL, brandStr, modelStr, serialNumberStr, typeStr, statusStr, ownerStr, limit, offset)
+	err := database.Asset.Select(&assets, summaryQuery, brandStr, modelStr, serialNumberStr, typeStr, statusStr, ownerStr, limit, offset)
 	if err != nil {
 		return res, err
 	}
@@ -296,7 +332,7 @@ func UpdateLaptop(tx *sqlx.Tx, assetID string, laptop *models.LaptopInput) error
 		return err
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("asset not found or not available for assignment")
+		return fmt.Errorf("laptop asset not found")
 	}
 	return nil
 }
@@ -318,7 +354,7 @@ func UpdateMouse(tx *sqlx.Tx, assetID string, mouse *models.MouseInput) error {
 		return err
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("asset not found or not available for assignment")
+		return fmt.Errorf("mouse asset not found")
 	}
 	return nil
 }
@@ -340,7 +376,7 @@ func UpdateKeyboard(tx *sqlx.Tx, assetID string, keyboard *models.KeyboardInput)
 		return err
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("asset not found or not available for assignment")
+		return fmt.Errorf("keyboard asset not found")
 	}
 	return nil
 }
@@ -356,19 +392,30 @@ func UpdateMobile(tx *sqlx.Tx, assetID string, mobile *models.MobileInput) error
 	WHERE asset_id = $1
 	`
 
-	_, err := tx.Exec(
+	result, err := tx.Exec(
 		query,
 		assetID,
-		mobile.Os,
-		mobile.Ram,
+		mobile.OS,
+		mobile.RAM,
 		mobile.Storage,
 		mobile.Charger,
 		mobile.Password,
 	)
+	if err != nil {
+		return err
+	}
 
-	return err
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("mobile asset not found")
+	}
+
+	return nil
 }
-func GetAssetInfo(userID, assetStatus string) ([]models.AssetInfoRequest, error) {
+func GetAssetInfo(userID, assetStatus string) ([]models.AssetInfo, error) {
 
 	query := `
 		SELECT id, brand, model, status, type
@@ -378,7 +425,7 @@ func GetAssetInfo(userID, assetStatus string) ([]models.AssetInfoRequest, error)
 		AND ($2 = '' OR status::TEXT = $2)
 	`
 
-	assetDetails := make([]models.AssetInfoRequest, 0)
+	assetDetails := make([]models.AssetInfo, 0)
 
 	err := database.Asset.Select(&assetDetails, query, userID, assetStatus)
 	return assetDetails, err
@@ -421,10 +468,10 @@ func GetUserInfo(name, role, userType, assetStatus string) ([]models.UserInfoReq
 
 	return filteredUsers, nil
 }
-func DeleteUser(tx *sqlx.Tx, userId string) error {
+func DeleteUser(tx *sqlx.Tx, userID string) error {
 	query := `Update users set archived_at = now()
              where id = $1 and archived_at is null`
-	result, err := tx.Exec(query, userId)
+	result, err := tx.Exec(query, userID)
 	if err != nil {
 		return err
 	}
@@ -433,29 +480,29 @@ func DeleteUser(tx *sqlx.Tx, userId string) error {
 		return err
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("asset not found or not available for assignment")
+		return fmt.Errorf("user not found or already archived")
 	}
 	return nil
 
 }
-func CountActiveAssets(tx *sqlx.Tx, userId string) (int, error) {
+func CountActiveAssets(tx *sqlx.Tx, userID string) (int, error) {
 	query := `Select count(*)
               from assets 
               where assigned_to = $1
               and archived_at IS NULL`
 	var count int
-	err := tx.Get(&count, query, userId)
+	err := tx.Get(&count, query, userID)
 	if err != nil {
 		return 0, err
 	}
 	return count, nil
 }
-func ArchiveUserSession(tx *sqlx.Tx, userId string) error {
+func ArchiveUserSession(tx *sqlx.Tx, userID string) error {
 	query := `update user_session
               set archived_at = now()
               where user_id = $1
               and archived_at is null`
-	result, err := tx.Exec(query, userId)
+	result, err := tx.Exec(query, userID)
 	if err != nil {
 		return err
 	}
@@ -464,12 +511,12 @@ func ArchiveUserSession(tx *sqlx.Tx, userId string) error {
 		return err
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("asset not found or not available for assignment")
+		return fmt.Errorf("no active session found for user")
 	}
 	return nil
 
 }
-func ReturnAllAssets(tx *sqlx.Tx, userId string) error {
+func ReturnAllAssets(tx *sqlx.Tx, userID string) error {
 
 	query := `
 		UPDATE assets
@@ -483,7 +530,7 @@ func ReturnAllAssets(tx *sqlx.Tx, userId string) error {
 		AND archived_at IS NULL
 	`
 
-	result, err := tx.Exec(query, userId)
+	result, err := tx.Exec(query, userID)
 	if err != nil {
 		return err
 	}
@@ -492,7 +539,7 @@ func ReturnAllAssets(tx *sqlx.Tx, userId string) error {
 		return err
 	}
 	if rowsAffected == 0 {
-		return fmt.Errorf("asset not found or not available for assignment")
+		return fmt.Errorf("no assets assigned to user")
 	}
 	return nil
 

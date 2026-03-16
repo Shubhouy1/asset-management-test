@@ -2,28 +2,34 @@ package utils
 
 import (
 	"context"
+	"os"
 
 	firebase "firebase.google.com/go"
 	"firebase.google.com/go/auth"
 	"google.golang.org/api/option"
 )
 
+var FirebaseApp *firebase.App
 var FirebaseAuth *auth.Client
 
 func InitFirebase() error {
 
-	opt := option.WithCredentialsFile("firebase-service-account.json")
+	serviceAccount := os.Getenv("FIREBASE_SERVICE_ACCOUNT")
+
+	opt := option.WithCredentialsFile(serviceAccount)
 
 	app, err := firebase.NewApp(context.Background(), nil, opt)
 	if err != nil {
 		return err
 	}
 
-	client, err := app.Auth(context.Background())
+	authClient, err := app.Auth(context.Background())
 	if err != nil {
 		return err
 	}
 
-	FirebaseAuth = client
+	FirebaseApp = app
+	FirebaseAuth = authClient
+
 	return nil
 }

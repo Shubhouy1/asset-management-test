@@ -50,7 +50,6 @@ func HashPassword(password string) (string, error) {
 		return "", err
 	}
 	return string(bytes), nil
-
 }
 
 func GenerateJWT(userID, sessionID, userRole string) (string, error) {

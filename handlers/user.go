@@ -19,16 +19,18 @@ var validate = validator.New()
 
 func RegisterUser(w http.ResponseWriter, r *http.Request) {
 	var body models.UserRequest
-	var userSessionId string
-	var userId string
+	var userSessionID string
+	var userID string
 	var userRole string
+
 	if err := utils.ParseBody(r, &body); err != nil {
 		utils.RespondError(w, http.StatusBadRequest, "fail to parse body", err)
 		return
 	}
-	validateErr := validate.Struct(&body)
-	if validateErr != nil {
-		utils.RespondError(w, http.StatusBadRequest, "fail to validate body", validateErr)
+
+	err := validate.Struct(&body)
+	if err != nil {
+		utils.RespondError(w, http.StatusBadRequest, "fail to validate body", err)
 		return
 	}
 
@@ -37,109 +39,128 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 		utils.RespondError(w, http.StatusInternalServerError, "fail to check user", err)
 		return
 	}
+
 	if exists {
 		utils.RespondError(w, http.StatusBadRequest, "fail to create user", errors.New("user already exists"))
 		return
 	}
+
 	hashPassword, hashErr := utils.HashPassword(body.Password)
 	if hashErr != nil {
 		utils.RespondError(w, http.StatusInternalServerError, "fail to hash password", hashErr)
 		return
 	}
+
 	joiningDate, err := time.Parse("2006-01-02", body.JoiningDate)
 	if err != nil {
-		utils.RespondError(w, http.StatusBadRequest, "invalid joining_date format (YYYY-MM-DD)", nil)
+		utils.RespondError(w, http.StatusBadRequest, "invalid joining_date format (YYYY-MM-DD)", err)
 		return
 	}
+
 	userRole = body.Role
+
 	txErr := database.Tx(func(tx *sqlx.Tx) error {
-		userId, err = dbhelpers.CreateUser(tx, body.Name, body.Email, body.Role, body.Type, body.PhoneNumber, hashPassword, joiningDate)
+		userID, err = dbhelpers.CreateUser(tx, body.Name, body.Email, body.Role, body.Type, body.PhoneNumber, hashPassword, joiningDate)
 		if err != nil {
 			return err
 		}
-		userSessionId, err = dbhelpers.CreateUserSession(tx, userId)
+
+		userSessionID, err = dbhelpers.CreateUserSession(tx, userID)
 		if err != nil {
 			return err
 		}
+
 		return nil
 	})
+
 	if txErr != nil {
 		utils.RespondError(w, http.StatusInternalServerError, "fail to create user", txErr)
 		return
 	}
-	token, err := utils.GenerateJWT(userId, userSessionId, userRole)
+
+	token, err := utils.GenerateJWT(userID, userSessionID, userRole)
 	if err != nil {
 		utils.RespondError(w, http.StatusInternalServerError, "fail to generate token", err)
 		return
 	}
+
 	utils.RespondJSON(w, http.StatusCreated, map[string]interface{}{
-		"Message":     "user created",
+		"message":     "user created",
 		"accessToken": token,
 	})
 }
 
 func LoginUser(w http.ResponseWriter, r *http.Request) {
 	var body models.LoginRequest
-	var userSessionId string
-	var userId string
+	var userSessionID string
+	var userID string
 	var userRole string
+
 	if err := utils.ParseBody(r, &body); err != nil {
 		utils.RespondError(w, http.StatusBadRequest, "fail to parse body", err)
 		return
 	}
-	validErr := validate.Struct(&body)
-	if validErr != nil {
-		utils.RespondError(w, http.StatusBadRequest, "fail to validate body", validErr)
+
+	err := validate.Struct(&body)
+	if err != nil {
+		utils.RespondError(w, http.StatusBadRequest, "fail to validate body", err)
 		return
 	}
 
 	txErr := database.Tx(func(tx *sqlx.Tx) error {
 		var err error
-		userId, userRole, err = dbhelpers.GetUserByEmail(tx, body.Email, body.Password)
+
+		userID, userRole, err = dbhelpers.GetUserByEmail(tx, body.Email, body.Password)
 		if err != nil {
 			return err
 		}
-		userSessionId, err = dbhelpers.CreateUserSession(tx, userId)
+
+		userSessionID, err = dbhelpers.CreateUserSession(tx, userID)
 		if err != nil {
 			return err
 		}
+
 		return nil
 	})
+
 	if txErr != nil {
 		utils.RespondError(w, http.StatusUnauthorized, "invalid email or password", txErr)
 		return
 	}
-	token, err := utils.GenerateJWT(userId, userSessionId, userRole)
+
+	token, err := utils.GenerateJWT(userID, userSessionID, userRole)
 	if err != nil {
 		utils.RespondError(w, http.StatusInternalServerError, "fail to generate token", err)
 		return
 	}
+
 	utils.RespondJSON(w, http.StatusOK, map[string]interface{}{
-		"Message":     "user logged in",
+		"message":     "user logged in",
 		"accessToken": token,
 		"userRole":    userRole,
 	})
 }
+
 func LogoutUser(w http.ResponseWriter, r *http.Request) {
 	auth, ok := middleware.GetAuthContext(r)
 	if !ok {
 		utils.RespondError(w, http.StatusUnauthorized, "unauthorized", nil)
 		return
 	}
+
 	sessionID := auth.SessionID
 	err := dbhelpers.ArchivedSession(sessionID)
 	if err != nil {
 		utils.RespondError(w, http.StatusInternalServerError, "logout failed", err)
 		return
 	}
-	utils.RespondJSON(w, http.StatusOK, map[string]interface{}{
-		"Message": "user logged out",
-	})
 
+	utils.RespondJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "user logged out",
+	})
 }
 
 func GetAllUsers(w http.ResponseWriter, r *http.Request) {
-
 	query := r.URL.Query()
 
 	name := query.Get("name")
@@ -157,25 +178,28 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 		"users": users,
 	})
 }
+
 func DeleteUser(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "id")
 
-	userId := chi.URLParam(r, "id")
-
-	if userId == "" {
+	if userID == "" {
 		utils.RespondError(w, http.StatusBadRequest, "user id required", nil)
 		return
 	}
 
 	txErr := database.Tx(func(tx *sqlx.Tx) error {
-		err := dbhelpers.ReturnAllAssets(tx, userId)
+
+		err := dbhelpers.ReturnAllAssets(tx, userID)
 		if err != nil {
 			return err
 		}
-		err = dbhelpers.ArchiveUserSession(tx, userId)
+
+		err = dbhelpers.ArchiveUserSession(tx, userID)
 		if err != nil {
 			return err
 		}
-		err = dbhelpers.DeleteUser(tx, userId)
+
+		err = dbhelpers.DeleteUser(tx, userID)
 		if err != nil {
 			return err
 		}

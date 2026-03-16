@@ -13,5 +13,3 @@ services:
       - POSTGRES_USER=local
       - POSTGRES_PASSWORD=local
       - POSTGRES_DB=storeX
-networks:
-  api.network:
