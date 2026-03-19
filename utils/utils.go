@@ -45,11 +45,11 @@ func ParseBody(r *http.Request, v interface{}) error {
 	return json.NewDecoder(r.Body).Decode(v)
 }
 func HashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hashPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return "", err
 	}
-	return string(bytes), nil
+	return string(hashPassword), nil
 }
 
 func GenerateJWT(userID, sessionID, userRole string) (string, error) {
@@ -57,7 +57,7 @@ func GenerateJWT(userID, sessionID, userRole string) (string, error) {
 		"user_id":    userID,
 		"session_id": sessionID,
 		"role":       userRole,
-		"exp":        time.Now().Add(time.Minute * 10).Unix(),
+		"exp":        time.Now().Add(time.Minute * 60).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString([]byte(os.Getenv("JWT_SECRET")))

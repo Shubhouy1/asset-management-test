@@ -50,7 +50,7 @@ func CreateAsset(w http.ResponseWriter, r *http.Request) {
 	txErr := database.Tx(func(tx *sqlx.Tx) error {
 
 		var err error
-		assetID, err = dbhelpers.CreateAsset(tx, body.Brand, body.Model, body.SerialNo, body.Type, body.Owner, warrantyStart, warrantyEnd)
+		assetID, err = dbhelpers.CreateAsset(tx, body.Brand, body.Model, body.SerialNumber, body.Type, body.Owner, warrantyStart, warrantyEnd)
 		if err != nil {
 			return err
 		}
@@ -76,10 +76,10 @@ func CreateAsset(w http.ResponseWriter, r *http.Request) {
 			return dbhelpers.InsertKeyboard(tx, assetID, body.Keyboard)
 
 		case "mobile":
-			if body.Mobile == nil {
+			if body.Mobiles == nil {
 				return fmt.Errorf("mobile details required")
 			}
-			return dbhelpers.InsertMobile(tx, assetID, body.Mobile)
+			return dbhelpers.InsertMobile(tx, assetID, body.Mobiles)
 
 		default:
 			return fmt.Errorf("unsupported asset type")
@@ -138,7 +138,7 @@ func AssignAsset(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func GetTotalAssets(w http.ResponseWriter, r *http.Request) {
+func GetAssetsByEmpID(w http.ResponseWriter, r *http.Request) {
 
 	auth, ok := middleware.GetAuthContext(r)
 	if !ok {
@@ -298,7 +298,7 @@ func UpdateAsset(w http.ResponseWriter, r *http.Request) {
 
 	txErr := database.Tx(func(tx *sqlx.Tx) error {
 
-		err := dbhelpers.UpdateAsset(tx, assetID, body.Brand, body.Model, body.SerialNo, body.Type, body.Owner, warrantyStart, warrantyEnd)
+		err := dbhelpers.UpdateAsset(tx, assetID, body.Brand, body.Model, body.SerialNumber, body.Type, body.Owner, warrantyStart, warrantyEnd)
 		if err != nil {
 			return err
 		}
@@ -341,5 +341,50 @@ func UpdateAsset(w http.ResponseWriter, r *http.Request) {
 
 	utils.RespondJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "asset updated",
+	})
+}
+func SetAsDamaged(w http.ResponseWriter, r *http.Request) {
+	assetID := chi.URLParam(r, "id")
+	if assetID == "" {
+		utils.RespondError(w, http.StatusBadRequest, "id cannot be empty", fmt.Errorf("empty asset id"))
+		return
+	}
+	err := dbhelpers.MarkAsDamaged(assetID)
+	if err != nil {
+		utils.RespondError(w, http.StatusInternalServerError, "failed to mark asset as damaged", err)
+		return
+	}
+	utils.RespondJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "asset marked as damaged",
+	})
+}
+func MarkForRepair(w http.ResponseWriter, r *http.Request) {
+	assetID := chi.URLParam(r, "id")
+	if assetID == "" {
+		utils.RespondError(w, http.StatusBadRequest, "id cannot be empty", fmt.Errorf("empty asset id"))
+		return
+	}
+	err := dbhelpers.MarkAsWaitingForRepair(assetID)
+	if err != nil {
+		utils.RespondError(w, http.StatusBadRequest, "failed to mark asset as waiting for repair", err)
+		return
+	}
+	utils.RespondJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "asset marked as waiting for repair",
+	})
+}
+func CompleteService(w http.ResponseWriter, r *http.Request) {
+	assetID := chi.URLParam(r, "id")
+	if assetID == "" {
+		utils.RespondError(w, http.StatusBadRequest, "asset id required", fmt.Errorf("empty asset id"))
+		return
+	}
+	err := dbhelpers.MarkAsAvailable(assetID)
+	if err != nil {
+		utils.RespondError(w, http.StatusBadRequest, "failed to mark asset as available", err)
+		return
+	}
+	utils.RespondJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "asset marked as available",
 	})
 }

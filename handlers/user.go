@@ -21,7 +21,7 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 	var body models.UserRequest
 	var userSessionID string
 	var userID string
-	var userRole string
+	userRole := "employee"
 
 	if err := utils.ParseBody(r, &body); err != nil {
 		utils.RespondError(w, http.StatusBadRequest, "fail to parse body", err)
@@ -34,14 +34,14 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	exists, err := dbhelpers.IsUserExist(body.Email)
+	isEmailExist, err := dbhelpers.IsUserExist(body.Email)
 	if err != nil {
 		utils.RespondError(w, http.StatusInternalServerError, "fail to check user", err)
 		return
 	}
 
-	if exists {
-		utils.RespondError(w, http.StatusBadRequest, "fail to create user", errors.New("user already exists"))
+	if isEmailExist {
+		utils.RespondError(w, http.StatusConflict, "fail to create user", errors.New("user already exists"))
 		return
 	}
 
@@ -56,11 +56,8 @@ func RegisterUser(w http.ResponseWriter, r *http.Request) {
 		utils.RespondError(w, http.StatusBadRequest, "invalid joining_date format (YYYY-MM-DD)", err)
 		return
 	}
-
-	userRole = body.Role
-
 	txErr := database.Tx(func(tx *sqlx.Tx) error {
-		userID, err = dbhelpers.CreateUser(tx, body.Name, body.Email, body.Role, body.Type, body.PhoneNumber, hashPassword, joiningDate)
+		userID, err = dbhelpers.CreateUser(tx, body.Name, body.Email, "employee", body.Type, body.PhoneNumber, hashPassword, joiningDate)
 		if err != nil {
 			return err
 		}
@@ -215,4 +212,30 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 	utils.RespondJSON(w, http.StatusOK, map[string]interface{}{
 		"message": "user deleted successfully",
 	})
+}
+func AssignRole(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "id")
+	if userID == "" {
+		utils.RespondError(w, http.StatusBadRequest, "user id required", nil)
+		return
+	}
+	var body models.AssignRoleRequest
+	if err := utils.ParseBody(r, &body); err != nil {
+		utils.RespondError(w, http.StatusBadRequest, "fail to parse body REQUEST", err)
+		return
+	}
+	err := validate.Struct(&body)
+	if err != nil {
+		utils.RespondError(w, http.StatusBadRequest, "fail to validate body", err)
+		return
+	}
+	err = dbhelpers.AssignRole(userID, body.Role)
+	if err != nil {
+		utils.RespondError(w, http.StatusBadRequest, "unable to assign role", err)
+		return
+	}
+	utils.RespondJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "role assigned successfully",
+	})
+
 }

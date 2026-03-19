@@ -19,21 +19,26 @@ func SetupRouter() chi.Router {
 
 		r.Use(middleware.AuthMiddleware)
 
-		r.Get("/get-assets", handlers.GetTotalAssets)
+		r.Get("/get-assets", handlers.GetAssetsByEmpID)
 		r.Post("/logout", handlers.LogoutUser)
 
 		r.Route("/users", func(r chi.Router) {
 
-			r.Use(middleware.RequiredRoles("admin", "asset-manager"))
+			r.Use(middleware.RequiredRoles("admin", "asset_manager"))
 
 			r.Get("/", handlers.GetAllUsers)
 			r.Delete("/{id}", handlers.DeleteUser)
+
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.RequiredRoles("admin"))
+				r.Patch("/{id}", handlers.AssignRole)
+			})
 
 		})
 
 		r.Route("/assets", func(r chi.Router) {
 
-			r.Use(middleware.RequiredRoles("admin", "asset-manager"))
+			r.Use(middleware.RequiredRoles("admin", "asset_manager"))
 
 			r.Post("/", handlers.CreateAsset)
 			r.Get("/", handlers.GetAssets)
@@ -42,7 +47,10 @@ func SetupRouter() chi.Router {
 
 				r.Put("/", handlers.UpdateAsset)
 				r.Put("/assign", handlers.AssignAsset)
-				r.Put("/sent-to-service", handlers.SendAssetToService)
+				r.Patch("/mark-as-damaged", handlers.SetAsDamaged)
+				r.Patch("/for-repair", handlers.MarkForRepair)
+				r.Patch("/send-to-service", handlers.SendAssetToService)
+				r.Patch("/complete-service", handlers.CompleteService)
 
 			})
 

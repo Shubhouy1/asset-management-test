@@ -32,26 +32,26 @@ type MobileInput struct {
 type CreateAssetRequest struct {
 	Brand         string `json:"brand" validate:"required"`
 	Model         string `json:"model" validate:"required"`
-	SerialNo      string `json:"serialNo" validate:"required"`
+	SerialNumber  string `json:"serialNumber" validate:"required"`
 	Type          string `json:"type" validate:"required,oneof=laptop mouse keyboard mobile"`
-	Owner         string `json:"owner" validate:"required"`
-	WarrantyStart string `json:"warrantyStart" validate:"required"`
-	WarrantyEnd   string `json:"warrantyEnd" validate:"required"`
+	Owner         string `json:"owner" validate:"required,oneof=client company"`
+	WarrantyStart string `json:"warrantyStart" validate:"required,datetime=2006-01-02"`
+	WarrantyEnd   string `json:"warrantyEnd" validate:"required,datetime=2006-01-02"`
 
 	Laptop   *LaptopInput   `json:"laptop,omitempty"`
 	Mouse    *MouseInput    `json:"mouse,omitempty"`
 	Keyboard *KeyboardInput `json:"keyboard,omitempty"`
-	Mobile   *MobileInput   `json:"mobile,omitempty"`
+	Mobiles  *MobileInput   `json:"mobiles,omitempty"`
 }
 
 type UpdateAssetRequest struct {
 	Brand         string `json:"brand" validate:"required"`
 	Model         string `json:"model" validate:"required"`
-	SerialNo      string `json:"serialNo" validate:"required"`
+	SerialNumber  string `json:"serialNumber" validate:"required"`
 	Type          string `json:"type" validate:"required,oneof=laptop mouse keyboard mobile"`
-	Owner         string `json:"owner" validate:"required"`
-	WarrantyStart string `json:"warrantyStart" validate:"required"`
-	WarrantyEnd   string `json:"warrantyEnd" validate:"required"`
+	Owner         string `json:"owner" validate:"required,oneof=client company"`
+	WarrantyStart string `json:"warrantyStart" validate:"required,datetime=2006-01-02"`
+	WarrantyEnd   string `json:"warrantyEnd" validate:"required,datetime=2006-01-02"`
 
 	Laptop   *LaptopInput   `json:"laptop,omitempty"`
 	Mouse    *MouseInput    `json:"mouse,omitempty"`
@@ -60,18 +60,18 @@ type UpdateAssetRequest struct {
 }
 
 type SentServiceRequest struct {
-	StartDate string `json:"startDate" db:"service_start" validate:"required"`
-	EndDate   string `json:"endDate" db:"service_end" validate:"required"`
+	StartDate string `json:"startDate" db:"service_start" validate:"required,datetime=2006-01-02"`
+	EndDate   string `json:"endDate" db:"service_end" validate:"required,datetime=2006-01-02"`
 }
 
 type Asset struct {
-	Brand     string    `db:"brand" json:"brand"`
-	Model     string    `db:"model" json:"model"`
-	SerialNo  string    `db:"serial_no" json:"serialNo"`
-	Type      string    `db:"type" json:"type"`
-	Status    string    `db:"status" json:"status"`
-	Owner     string    `db:"owner" json:"owner"`
-	CreatedAt time.Time `db:"created_at" json:"createdAt"`
+	Brand        string    `db:"brand" json:"brand"`
+	Model        string    `db:"model" json:"model"`
+	SerialNumber string    `db:"serial_number" json:"serialNumber"`
+	Type         string    `db:"type" json:"type"`
+	Status       string    `db:"status" json:"status"`
+	Owner        string    `db:"owner" json:"owner"`
+	CreatedAt    time.Time `db:"created_at" json:"createdAt"`
 }
 
 type AssetInfo struct {
@@ -87,8 +87,8 @@ type DashboardUserSummary struct {
 }
 
 type DashboardUserData struct {
-	Summary DashboardUserSummary
-	Assets  []Asset
+	Summary DashboardUserSummary `json:"summary"`
+	Assets  []Asset              `json:"assets"`
 }
 
 type DashboardSummary struct {

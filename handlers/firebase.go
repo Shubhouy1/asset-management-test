@@ -49,7 +49,7 @@ func FirebaseRegisterUser(w http.ResponseWriter, r *http.Request) {
 			tx,
 			body.Name,
 			body.Email,
-			body.Role,
+			"employee",
 			body.Type,
 			body.PhoneNumber,
 			"",
@@ -72,7 +72,7 @@ func FirebaseRegisterUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	claims := map[string]interface{}{
-		"role": body.Role,
+		"role": "employee",
 	}
 
 	err = utils.FirebaseAuth.SetCustomUserClaims(ctx, userRecord.UID, claims)
@@ -87,9 +87,9 @@ func FirebaseRegisterUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.RespondJSON(w, http.StatusOK, map[string]interface{}{
-		"message": "user registered successfully",
-		"uid":     userRecord.UID,
-		"userId":  userID,
-		"token":   idToken,
+		"message":    "user registered successfully",
+		"firebaseID": userRecord.UID,
+		"userID":     userID,
+		"token":      idToken,
 	})
 }
